@@ -1,0 +1,4 @@
+dataset/*
+! dataset/download.sh
+! dataset/data_process.py
+/*log

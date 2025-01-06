@@ -1,11 +1,18 @@
+# import sys
+# import os
+# os.path.dirname(__file__)
+# sys.path.insert(0, '../CLIP/clip')
+
+from CLIP.clip.model import CLIP
+from CLIP.clip.simple_tokenizer import SimpleTokenizer
+
 import torch
 #import clip
 from PIL import Image
-import time
-from model import CLIP
+#from model import CLIP
 import copy
 from typing import Union, List
-from dataset import CsvDataset
+from .dataset import CsvDataset
 from torch.utils.data import DataLoader
 
 def _transform(n_px):
@@ -32,7 +39,7 @@ def build_model_transform(model_hyp):
     return model, _transform(model.visual.input_resolution)
         
 def build_tokenizer():
-    from simple_tokenizer import SimpleTokenizer
+    #from simple_tokenizer import SimpleTokenizer
     _tokenizer = SimpleTokenizer()
     def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: bool = False) -> Union[torch.IntTensor, torch.LongTensor]:
         """
@@ -97,7 +104,7 @@ def bulid_dataloader(args, data_hyp, transform, tokenizer, shuffle=True):
 
 
 def build_clip_loss(loss_hyp):
-    from loss import ClipLoss
+    from .loss import ClipLoss
     return ClipLoss(**loss_hyp)
 
 if __name__ == '__main__':

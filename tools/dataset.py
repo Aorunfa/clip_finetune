@@ -5,9 +5,9 @@ from PIL import Image
 import numpy as np
 
 class CsvDataset(Dataset):
-    def __init__(self, csv_path, transforms, img_key='link', caption_key='caption', sep="\t", tokenizer=None):
+    def __init__(self, csv_path, transforms, img_key='link', caption_key='caption', tokenizer=None):
         logging.debug(f'Loading csv data from {csv_path}.')
-        df = pd.read_csv(csv_path, sep=sep)
+        df = pd.read_csv(csv_path)
 
         self.images = df[img_key].tolist()
         self.captions = df[caption_key].tolist()

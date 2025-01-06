@@ -1,4 +1,4 @@
-from utils import (
+from tools.utils import (
                     build_tokenizer,
                     build_clip_loss,
                     build_model_transform,
@@ -12,17 +12,16 @@ from torch.amp.grad_scaler import GradScaler
 from typing import Union, Tuple
 from torch.optim.adamw import AdamW
 from torch.optim import lr_scheduler
-import logging
 import numpy as np
 import os
 import time
 import pandas as pd
 
 def print_step(step_num, data, item='loss'):
-    # logging.debug("step: {:0>8d}{:>8s} loss: {:.4f}".format(step_num, '', l))
     print("step: {:0>8d}{:>8s} {:s}: {:.4f}".format(step_num, '', item, data))
 
 def save_checkpoint(model, step, save_dir):
+    os.makedirs(save_dir, exist_ok=True)
     suffix = '%s-%s.pth' % (step, time.strftime("%Y-%H-%M-%S"))
     model.eval()
     torch.save(model.state_dict(), os.path.join(save_dir, suffix))
@@ -82,9 +81,6 @@ def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
                 output = model(images.to(device), texts.to(device))
                 loss = loss_fun(**output)
 
-            # output = model(images.to(device), texts.to(device))
-            # loss = loss_fun(**output)
-
             if step < args.warmup:
                 schduler_warmup.step()
             
@@ -100,8 +96,8 @@ def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
                     optimizer.step()
 
-                #current_lr = optimizer.param_groups[0]['lr']
                 print_step(step, loss.data.item())
+                #current_lr = optimizer.param_groups[0]['lr']
                 #print('lr: ', current_lr)
                 # optimizer.zero_grad()
             
@@ -139,31 +135,41 @@ def test(args, model, val_loader):
     return metric
 
 if __name__ == '__main__':
-    cfg = '/home/chaofeng/CLIP/clip/config.yaml'
+    cfg = 'config.yaml'
     args = yaml_load(cfg)
-    model, transform = build_model_transform(args.model)
+    model, transform = build_model_transform(args.model_hyp)
     tokenizer = build_tokenizer()
-    loss_fun = build_clip_loss(args.loss)
+    loss_fun = build_clip_loss(args.loss_hyp)
 
     train_loader = bulid_dataloader(args, args.train,transform, tokenizer, shuffle=True)
     val_loader = bulid_dataloader(args,  args.val, transform, tokenizer, shuffle=False)
     
-    # # resum for finetun
-    # checkpoint = torch.load('/dev/shm/chaofeng/ViT-B-32.pt', weights_only=True)
-    checkpoint = torch.jit.load('/dev/shm/chaofeng/ViT-B-32.pt')
-    model.load_state_dict(safe_state_dict(model, checkpoint.state_dict()))
+    # resum for finetun
+    if args.resum_path != '' and args.resum_path is not None:
+        checkpoint = torch.jit.load(args.resum_path)
+        model.load_state_dict(
+            safe_state_dict(model, checkpoint.state_dict())
+            )
+        
     
     train(args, model, loss_fun, train_loader, val_loader)
 
     """
-    nohup /var/lib/anaconda3/envs/tkh/bin/python /home/chaofeng/CLIP/clip/train.py > /home/chaofeng/CLIP/clip/n3_amp.log 2>&1 &
+    nohup /var/lib/anaconda3/envs/tkh/bin/python /home/chaofeng/clip_finetune/train.py > /home/chaofeng/clip_finetune/n_amp_pretrain.log 2>&1 &
     """
 
     """
     1/6任务:
+    尝试预训练 + 半精度训练，查看结果如何 --- todo
+    运行确认数据处理脚本无异常
+    预设所有模型结构，vit + 卷积 --- todo
+
+
+    
     分布式训练 - todo，暂时不弄，先把clip_train repo写好
     增加写好resum的加载函数 -- done
-    加载预训练模型查看微调结果，对于预训练，指标是否会有增长 -- 会增长，证明从头训指标一般由于数据量不足导致
+    加载预训练模型查看微调结果，对于预训练，指标是否会有增长 -- done 会增长，证明从头训指标一般由于数据量不足导致
+    
     
     imagenet_val caption转换进行新训练 -- done
     启动混合精度训练，对比训练速度和显存占用 -- done 显存占用减小一半

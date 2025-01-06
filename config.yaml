@@ -1,4 +1,5 @@
-model:          # vit-base-32
+# model config for vit-base-32
+model_hyp:
   embed_dim: 512
   # vision
   image_resolution: 224
@@ -12,35 +13,35 @@ model:          # vit-base-32
   transformer_heads: 8
   transformer_layers: 12
 
-
-loss:  # loss
+# loss config
+loss_hyp:
   local_loss: False
   gather_with_grad: False
   cache_labels: True
   rank: 0
   world_size: -1
 
-# train setup
+# train config
 train:
-  csv_path: '/home/chaofeng/CLIP/clip/csv/train.csv'
+  csv_path: './dataset/csv/train.csv'
   img_key: 'link'
   caption_key: 'caption'
 
 val:
-  csv_path: '/home/chaofeng/CLIP/clip/csv/val.csv'
+  csv_path: './dataset/csv/val.csv'
   img_key: 'link'
   caption_key: 'caption'
 
-device: 'cuda:1'
-resum_path: ''
-batch_size: 64
+device: 'cuda'
+resum_path: '/dev/shm/chaofeng/ViT-B-32.pt'    # pretrained checkpoint path
+batch_size: 64    # no less than 8
 num_workers: 16
 epochs: 400
-warmup: 1000    # per batch
+warmup: 1000      # per batch
 accumulate: 10
 val_accumulate: 1000 # per time to run test fn
-save_dir: '/dev/shm/chaofeng/checkpoint/clip'
-metric_csv: /home/chaofeng/CLIP/clip/checkpoint/metric_ft.csv
+save_dir: './record/checkpoint/clip'
+metric_csv: ./record/metric_new.csv
 
 
 # optimiezer
@@ -48,4 +49,4 @@ lr: 1e-6              # 0.1 # 1e-4,  1e-5
 lr_final: 0.001
 
 # amp
-amp: False
+amp: True
