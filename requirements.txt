@@ -1,0 +1,8 @@
+numpy==1.26.4
+torch==2.4.0
+tqdm==4.66.5
+transformers==4.44.0
+ftfy
+packaging
+regex
+torchvision
