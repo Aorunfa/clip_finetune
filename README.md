@@ -29,20 +29,20 @@ cd ..
 运行后确保目录结构如下
 
 ```text
-    clip_finetune/dataset
-    ├── csv
-    │   ├── train.csv
-    │   └── val.csv
-    ├── data
-    │   ├── ILSVRC2012_val_00000001.JPEG
-    │   ├── ILSVRC2012_val_00000002.JPEG
-    │   └── ...
-    ├── imagenet_val
-    │   ├── classname.txt
-    │   ├── ...
-    │   └── val.csv
-    ├── data_process.py
-    └── download.sh
+clip_finetune/dataset
+├── csv
+│   ├── train.csv
+│   └── val.csv
+├── data
+│   ├── ILSVRC2012_val_00000001.JPEG
+│   ├── ILSVRC2012_val_00000002.JPEG
+│   └── ...
+├── imagenet_val
+│   ├── classname.txt
+│   ├── ...
+│   └── val.csv
+├── data_process.py
+└── download.sh
 ```
 
 
@@ -57,11 +57,20 @@ python ./train.py
 
 # 训练指标说明
 采用准确率和相似度度量batch内的特征对比结果。
+
     - 准确率说明：
         · 首先每个batch包含不重复的类别样本，意味着标签caption文本也不重复
         · 计算每一个样本的图片embedding与所有样本的文本embedding的相似度
         · 当一个样本与自己的文本相似度最好时，表示此时预测正确，否则预测错误
         · 准确率 = (所有预测正确的样本数) / batch_size，对所有batch取平均
+    
     - 相似度说明：
         · batch内每一个样本计算每一个样本的图片embedding与所有样本的文本embedding的相似度，取softmax
         · 取每一个样本与自身文本的相似度的均值
+
+训练指标展示
+* 预训练初始化微调
+初始化权重指标微调三个epochs
+* 从零训练
+损失持续下降，但准确率和相似度最终只能稳定在0.39和0.39附近，
+
