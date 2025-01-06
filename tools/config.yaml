@@ -1,0 +1,51 @@
+model:          # vit-base-32
+  embed_dim: 512
+  # vision
+  image_resolution: 224
+  vision_layers: 12
+  vision_width: 768
+  vision_patch_size: 32
+  # text
+  context_length: 77
+  vocab_size: 49408
+  transformer_width: 512
+  transformer_heads: 8
+  transformer_layers: 12
+
+
+loss:  # loss
+  local_loss: False
+  gather_with_grad: False
+  cache_labels: True
+  rank: 0
+  world_size: -1
+
+# train setup
+train:
+  csv_path: '/home/chaofeng/CLIP/clip/csv/train.csv'
+  img_key: 'link'
+  caption_key: 'caption'
+
+val:
+  csv_path: '/home/chaofeng/CLIP/clip/csv/val.csv'
+  img_key: 'link'
+  caption_key: 'caption'
+
+device: 'cuda:1'
+resum_path: ''
+batch_size: 64
+num_workers: 16
+epochs: 400
+warmup: 1000    # per batch
+accumulate: 10
+val_accumulate: 1000 # per time to run test fn
+save_dir: '/dev/shm/chaofeng/checkpoint/clip'
+metric_csv: /home/chaofeng/CLIP/clip/checkpoint/metric_ft.csv
+
+
+# optimiezer
+lr: 1e-6              # 0.1 # 1e-4,  1e-5 
+lr_final: 0.001
+
+# amp
+amp: False
