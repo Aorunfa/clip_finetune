@@ -9,6 +9,7 @@
 # 快速开始
 ## 环境安装
 ```bash
+git clone https://github.com/Aorunfa/clip_finetune.git
 conda create -n clip python=3.10
 cd ./clip_finetune
 conda activate clip
@@ -16,28 +17,38 @@ pip install -r requirements.txt
 ```
 
 ## 数据准备
-使用微小数据集快速验证训练过程，选择imagenet1k的验证数据集作为训练数据，从[imagenet_val](https://modelscope.cn/datasets/tany0699/imagenet_val/files)下载数据放置于./dataset目录
+使用小微数据集快速验证训练过程，选择imagenet1k的验证数据集作为训练数据，从[imagenet_val](https://modelscope.cn/datasets/tany0699/imagenet_val/files)下载数据放置于./dataset目录。
+
+数据下载与数据处理命令为
 ```bash
 cd ./dataset
 sh download.sh
 cd ..
 ```
 
-目录结构如下
-```
-/dataset
-    
-```
+运行后确保目录结构如下
+    ```text
+      clip_finetune/dataset
+      ├── csv
+      │   ├── train.csv
+      │   └── val.csv
+      ├── data
+      │   ├── ILSVRC2012_val_00000001.JPEG
+      │   ├── ILSVRC2012_val_00000002.JPEG
+      │   └── ...
+      ├── imagenet_val
+      │   ├── classname.txt
+      │   ├── ...
+      │   └── val.csv
+      ├── data_process.py
+      └── download.sh
+      ```
 
-运行数据处理脚本
-```bash
-python tools/data_process.py
-```
-获得划分后的训练集train.csv和验证集val.csv
 
 ## 单卡训练
-修改config.yaml文件，启动单卡训练脚本
+修改config.yaml文件，启动单卡训练脚本，训练过程指标将存储在'record/metric.csv'
 ```bash
+python ./train.py
 ```
 
 ## 多卡训练
