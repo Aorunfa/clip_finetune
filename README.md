@@ -28,22 +28,22 @@ cd ..
 
 运行后确保目录结构如下
 
-    ```text
-      clip_finetune/dataset
-      ├── csv
-      │   ├── train.csv
-      │   └── val.csv
-      ├── data
-      │   ├── ILSVRC2012_val_00000001.JPEG
-      │   ├── ILSVRC2012_val_00000002.JPEG
-      │   └── ...
-      ├── imagenet_val
-      │   ├── classname.txt
-      │   ├── ...
-      │   └── val.csv
-      ├── data_process.py
-      └── download.sh
-      ```
+```text
+    clip_finetune/dataset
+    ├── csv
+    │   ├── train.csv
+    │   └── val.csv
+    ├── data
+    │   ├── ILSVRC2012_val_00000001.JPEG
+    │   ├── ILSVRC2012_val_00000002.JPEG
+    │   └── ...
+    ├── imagenet_val
+    │   ├── classname.txt
+    │   ├── ...
+    │   └── val.csv
+    ├── data_process.py
+    └── download.sh
+```
 
 
 ## 单卡训练
