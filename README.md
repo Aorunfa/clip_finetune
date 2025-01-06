@@ -27,6 +27,7 @@ cd ..
 ```
 
 运行后确保目录结构如下
+
     ```text
       clip_finetune/dataset
       ├── csv
