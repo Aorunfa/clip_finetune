@@ -8,7 +8,6 @@ class CsvDataset(Dataset):
     def __init__(self, csv_path, transforms, img_key='link', caption_key='caption', tokenizer=None):
         logging.debug(f'Loading csv data from {csv_path}.')
         df = pd.read_csv(csv_path)
-
         self.images = df[img_key].tolist()
         self.captions = df[caption_key].tolist()
         self.transforms = transforms

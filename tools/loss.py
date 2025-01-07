@@ -71,28 +71,36 @@ class ClipLoss(nn.Module):
             labels = self.labels[device]
         return labels
 
-    def get_logits(self, image_features, text_features, logit_scale):
-        if self.world_size > 1:
-            all_image_features, all_text_features = gather_features(
-                image_features,
-                text_features,
-                local_loss=self.local_loss,
-                gather_with_grad=self.gather_with_grad,
-                rank=self.rank,
-                world_size=self.world_size,
-            )
+    # def get_logits(self, image_features, text_features, logit_scale):
+    #     if self.world_size > 1:
+    #         all_image_features, all_text_features = gather_features(
+    #             image_features,
+    #             text_features,
+    #             local_loss=self.local_loss,
+    #             gather_with_grad=self.gather_with_grad,
+    #             rank=self.rank,
+    #             world_size=self.world_size,
+    #         )
 
-            if self.local_loss:
-                logits_per_image = logit_scale * image_features @ all_text_features.T
-                logits_per_text = logit_scale * text_features @ all_image_features.T
-            else:
-                logits_per_image = logit_scale * all_image_features @ all_text_features.T
-                logits_per_text = logits_per_image.T
-        else:
-            logits_per_image = logit_scale * image_features @ text_features.T
-            logits_per_text = logit_scale * text_features @ image_features.T
+    #         if self.local_loss:
+    #             logits_per_image = logit_scale * image_features @ all_text_features.T
+    #             logits_per_text = logit_scale * text_features @ all_image_features.T
+    #         else:
+    #             logits_per_image = logit_scale * all_image_features @ all_text_features.T
+    #             logits_per_text = logits_per_image.T
+    #     else:
+    #         logits_per_image = logit_scale * image_features @ text_features.T
+    #         logits_per_text = logit_scale * text_features @ image_features.T
+        
+    #     return logits_per_image, logits_per_text
+
+
+    def get_logits(self, image_features, text_features, logit_scale):
+        logits_per_image = logit_scale * image_features @ text_features.T
+        logits_per_text = logit_scale * text_features @ image_features.T
         
         return logits_per_image, logits_per_text
+    
 
     def forward(self, image_features, text_features, logit_scale, output_dict=False):
         device = image_features.device

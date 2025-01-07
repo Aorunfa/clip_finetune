@@ -34,7 +34,3 @@ if __name__ == '__main__':
     df_val, df_train = process_csv()
     df_val.to_csv(os.path.join(csv_dir, 'val.csv'), index=False)
     df_train.to_csv(os.path.join(csv_dir, 'train.csv'), index=False)
-
-
-
-

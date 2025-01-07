@@ -1,31 +1,46 @@
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 from tools.utils import (
                     build_tokenizer,
                     build_clip_loss,
                     build_model_transform,
                     bulid_dataloader,
+                    bulid_dataloader_dist
                     )
+from tools.dist_tools import (
+    is_master,
+    is_parallel,
+    de_parallel,
+    torch_distributed_zero_first,
+    setup_ddp_envs,
+    RANK,
+    WORLD_SIZE
+)
 import torch
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
+import torch.nn as nn
+from contextlib import contextmanager
 
 
 from typing import Union, Tuple
 from torch.optim.adamw import AdamW
 from torch.optim import lr_scheduler
 import numpy as np
-import os
 import time
 import pandas as pd
+from torch import distributed as dist
 
 def print_step(step_num, data, item='loss'):
     print("step: {:0>8d}{:>8s} {:s}: {:.4f}".format(step_num, '', item, data))
 
 def save_checkpoint(model, step, save_dir):
-    os.makedirs(save_dir, exist_ok=True)
-    suffix = '%s-%s.pth' % (step, time.strftime("%Y-%H-%M-%S"))
-    model.eval()
-    torch.save(model.state_dict(), os.path.join(save_dir, suffix))
-    model.train()
+    if is_master():
+        os.makedirs(save_dir, exist_ok=True)
+        suffix = '%s-%s.pth' % (step, time.strftime("%Y-%H-%M-%S"))
+        de_parallel(model).eval()
+        torch.save(de_parallel(model).state_dict(), os.path.join(save_dir, suffix))
+        de_parallel(model).train()
 
 def save_metric(data:dict, save_csv):
     with open(save_csv, 'a') as file:
@@ -62,8 +77,8 @@ class yaml_load():
 
 def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
     device = args.device
-    model.train()
-    model.to(device)
+    de_parallel(model).train()
+    # model.to(device)
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     schduler = lr_scheduler.LinearLR(optimizer, 
                                      start_factor=1, 
@@ -74,55 +89,69 @@ def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
                                             end_factor=1, 
                                             total_iters=args.warmup)
     scaler = GradScaler(device=device)
+    optimizer.zero_grad()
     for epoch in range(args.epochs):
         for step, (images, texts) in enumerate(train_loader):
             step += epoch * len(train_loader)
+            
+            print('rank:%d ' % RANK, 'step:%d '%step, 'tttt: ', images.shape)
+            #time.sleep(1)
+            
             with autocast(device, enabled=args.amp, dtype=torch.bfloat16):
                 output = model(images.to(device), texts.to(device))
                 loss = loss_fun(**output)
+                loss = loss * WORLD_SIZE
+            
+            if args.amp:
+                scaler.scale(loss).backward()
+            else:
+                loss.backward()            
 
             if step < args.warmup:
                 schduler_warmup.step()
             
             if (step + 1) % args.accumulate == 0:
-                optimizer.zero_grad()
                 if args.amp:
-                    loss = scaler.scale(loss)
-                    scaler.scale(loss).backward()
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
-                    loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
                     optimizer.step()
+                optimizer.zero_grad()
 
-                print_step(step, loss.data.item())
-                #current_lr = optimizer.param_groups[0]['lr']
-                #print('lr: ', current_lr)
-                # optimizer.zero_grad()
+                if is_master():
+                    print_step(step, loss.data.item())
             
             # if (step + 1) % args.val_accumulate == 0:
             if step % args.val_accumulate == 0:
-                current_lr = optimizer.param_groups[0]['lr']
-                metric = {'step': step, 
-                          'train_loss': loss.data.item(), 
-                          'lr': current_lr}
-                metric.update(test(args, model, val_loader))
-                #save_checkpoint(model, step, args.save_dir)
-                save_metric(metric, args.metric_csv)
-                 
+                with torch_distributed_zero_first(RANK): # barrier for no master
+                    if is_master():
+                        current_lr = optimizer.param_groups[0]['lr']
+                        metric = {'step': step, 
+                                'train_loss': loss.data.item(), 
+                                'lr': current_lr}
+                        metric.update(val(args, model, val_loader))
+                        #save_checkpoint(model, step, args.save_dir)
+                        save_metric(metric, args.metric_csv)
+                
         if step >= args.warmup:
             schduler.step()
-    save_checkpoint(model, step, args.save_dir)
+
+    # save_checkpoint(model, step, args.save_dir)
 
 @torch.no_grad()
-def test(args, model, val_loader):
+def val(args, model, val_loader):
     # metric: acc and avg smilarity 
     # val_loader for no shuffle
     device = args.device
     model.eval()
     metric = {'acc': 0, 'smilarity': 0}
     for i, (images, texts) in enumerate(val_loader):
+        print('vvvvv: ', images.shape)
+        # time.sleep(1)
+
         logits_per_image, _ = model(images.to(device), texts.to(device))
         probs = logits_per_image.softmax(dim=-1).cpu().numpy()
         preds = logits_per_image.argmax(dim=-1).cpu().numpy()
@@ -135,28 +164,44 @@ def test(args, model, val_loader):
     return metric
 
 if __name__ == '__main__':
+    setup_ddp_envs()
     cfg = 'config.yaml'
     args = yaml_load(cfg)
-    model, transform = build_model_transform(args.model_hyp)
-    tokenizer = build_tokenizer()
-    loss_fun = build_clip_loss(args.loss_hyp)
+    # update cfg
+    args.val_accumulate = args.val_accumulate // WORLD_SIZE
+    args.warmup = args.warmup // WORLD_SIZE
 
-    train_loader = bulid_dataloader(args, args.train,transform, tokenizer, shuffle=True)
-    val_loader = bulid_dataloader(args,  args.val, transform, tokenizer, shuffle=False)
-    
-    # resum for finetun
+    # build model
+    model, transform = build_model_transform(args.model_hyp)
     if args.resum_path != '' and args.resum_path is not None:
         checkpoint = torch.jit.load(args.resum_path)
-        model.load_state_dict(
-            safe_state_dict(model, checkpoint.state_dict())
-            )
+        model.load_state_dict(safe_state_dict(model, checkpoint.state_dict()))
         
+    # build ddp
+    if  WORLD_SIZE > 1:
+        args.device = f'cuda:{RANK}'
+        model.to(args.device)
+        model = torch.nn.parallel.DistributedDataParallel(model, 
+                                                          device_ids=[RANK], 
+                                                          output_device=RANK, 
+                                                          find_unused_parameters=False)
+    # build loss
+    args.loss_hyp['rank'] = RANK
+    args.loss_hyp['world_size'] = WORLD_SIZE 
+    loss_fun = build_clip_loss(args.loss_hyp)
+
+    # build data
+    tokenizer = build_tokenizer()
+    train_loader = bulid_dataloader_dist(args, args.train, transform, tokenizer, shuffle=True, rank=RANK)
+    if is_master():
+        val_loader = bulid_dataloader(args,  args.val, transform, tokenizer, shuffle=False)
+    else:
+        val_loader = None
     train(args, model, loss_fun, train_loader, val_loader)
+    
 
-    """
+    """ 
+    python -m torch.distributed.run --nproc_per_node 4 --nnodes 1 /home/chaofeng/clip_finetune/train_dist.py
+
     nohup /var/lib/anaconda3/envs/tkh/bin/python /home/chaofeng/clip_finetune/train.py > /home/chaofeng/clip_finetune/n_scratch_amp.log 2>&1 &
-    """
-
-    """
-    预设所有模型结构，vit + res --- todo
     """

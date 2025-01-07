@@ -1,19 +1,14 @@
-# import sys
-# import os
-# os.path.dirname(__file__)
-# sys.path.insert(0, '../CLIP/clip')
-
+# import torch.distributed
 from CLIP.clip.model import CLIP
 from CLIP.clip.simple_tokenizer import SimpleTokenizer
-
-import torch
-#import clip
-from PIL import Image
-#from model import CLIP
-import copy
-from typing import Union, List
 from .dataset import CsvDataset
+import torch
+from PIL import Image
+from typing import Union, List
 from torch.utils.data import DataLoader
+import os
+from torch.utils.data.distributed import DistributedSampler# distributed
+
 
 def _transform(n_px):
     from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
@@ -95,7 +90,6 @@ def collect_fun(batch):
 
 def bulid_dataloader(args, data_hyp, transform, tokenizer, shuffle=True):
     ds = CsvDataset(
-
             **data_hyp,
             transforms=transform,
             tokenizer=tokenizer
@@ -103,17 +97,36 @@ def bulid_dataloader(args, data_hyp, transform, tokenizer, shuffle=True):
     return DataLoader(ds, batch_size=args.batch_size, num_workers=args.num_workers, collate_fn=collect_fun, shuffle=shuffle)
 
 
+def bulid_dataloader_dist(args, data_hyp, transform, tokenizer, shuffle=True, rank=-1):
+    ds = CsvDataset(
+            **data_hyp,
+            transforms=transform,
+            tokenizer=tokenizer
+        )
+    nd = torch.cuda.device_count()  # number of CUDA devices
+    nw = min([os.cpu_count() // max(nd, 1), args.num_workers])  # number of workers
+    sampler = None if rank == -1 else DistributedSampler(ds, shuffle=shuffle)
+    generator = torch.Generator()
+    generator.manual_seed(6148914691236517205 + rank)
+    return DataLoader(ds, 
+                      batch_size=args.batch_size, 
+                      num_workers=nw, 
+                      collate_fn=collect_fun,  
+                      sampler=sampler, 
+                      generator=generator)
+
+
 def build_clip_loss(loss_hyp):
     from .loss import ClipLoss
     return ClipLoss(**loss_hyp)
 
-if __name__ == '__main__':
-    args = Config()
-    model, transform = build_model_transform(args)
-    tokenizer = build_tokenizer()
-    # res = tokenizer(["a diagram", "a dog", "a cat"])
-    trian_dl = bulid_dataloader(args, transform, tokenizer)
-    loss = build_clip_loss(args)
+# if __name__ == '__main__':
+#     args = Config()
+#     model, transform = build_model_transform(args)
+#     tokenizer = build_tokenizer()
+#     # res = tokenizer(["a diagram", "a dog", "a cat"])
+#     trian_dl = bulid_dataloader(args, transform, tokenizer)
+#     loss = build_clip_loss(args)
 
 
     

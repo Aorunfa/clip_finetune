@@ -1,0 +1,14 @@
+# model config for vit-base-32
+model_hyp:
+  embed_dim: 512
+  # vision
+  image_resolution: 224
+  vision_layers: 12
+  vision_width: 768
+  vision_patch_size: 32
+  # text
+  context_length: 77
+  vocab_size: 49408
+  transformer_width: 512
+  transformer_heads: 8
+  transformer_layers: 12

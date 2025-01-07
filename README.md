@@ -4,7 +4,7 @@
 - [x] <input type="checkbox" disabled checked> 数据预处理脚本
 - [x] <input type="checkbox" disabled checked> 损失函数
 - [x] <input type="checkbox" disabled checked> 单卡训练
-- [ ] <input type="checkbox" disabled > 单机多卡训练
+- [x] <input type="checkbox" disabled checked > 单机多卡训练
 
 # 快速开始
 ## 环境安装
@@ -69,8 +69,14 @@ python ./train.py
         · 取每一个样本与自身文本的相似度的均值
 
 训练指标展示
+
 * 预训练初始化微调
-初始化权重指标微调三个epochs
+!图
+> 微调1000个steps比预训练指标有显著增长，但随着训练step增大，指标相对稳定，后续开始出现下降，而损失持续下降。
+> 推测指标增长是由于模型开始适应新的imag-text分布，后续指标下降是由于训练集与验证集分布差异大，模型过拟合无法适应验证集分布
+
 * 从零训练
-损失持续下降，但准确率和相似度最终只能稳定在0.39和0.39附近，
+!图
+> 损失持续下降，但准确率和相似度最终只能稳定在0.39和0.39附近，同样出现了指标先增加后下降的特点。
+> 同意推测数据量太少无法适应OOD
 
