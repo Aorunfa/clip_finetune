@@ -170,6 +170,7 @@ if __name__ == '__main__':
     # update cfg
     args.val_accumulate = args.val_accumulate // WORLD_SIZE
     args.warmup = args.warmup // WORLD_SIZE
+    args.num_workers = min(os.cpu_count(), args.num_workers * WORLD_SIZE)
 
     # build model
     model, transform = build_model_transform(args.model_hyp)

@@ -35,7 +35,7 @@ val:
 device: 'cuda:3'
 resum_path: '' # '/dev/shm/chaofeng/ViT-B-32.pt'    # pretrained checkpoint path, /dev/shm/chaofeng/RN50.pt
 batch_size: 64    # no less than 8
-num_workers: 32
+num_workers: 8
 epochs: 400
 warmup: 1000      # per batch
 accumulate: 10
