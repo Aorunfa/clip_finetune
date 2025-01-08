@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ```
 
 ## 数据准备
-使用小微数据集快速验证训练过程，选择imagenet1k的验证数据集作为训练数据，从[imagenet_val](https://modelscope.cn/datasets/tany0699/imagenet_val/files)下载数据放置于./dataset目录。
+使用小微数据集快速验证训练过程，选择imagenet1k的验证数据集作为训练数据，从[imagenet_val](https://modelscope.cn/datasets/tany0699/imagenet_val)下载数据放置于./dataset目录。
 
 数据下载与数据处理命令为
 ```bash
@@ -76,12 +76,15 @@ python -m torch.distributed.run --nproc_per_node 4 --nnodes 1 ./train_dist.py
 
 * 预训练初始化微调
 
+![指标变化](doc/metric_ft.png "从头训练指标变化")  
+
 > * 微调1600个steps比预训练权重在验证集的指标上有显著增长，但随着训练step增大，指标开始相对稳定后陆续下降，而损失持续下降。
 > * 推测指标增长是由于模型开始适应新的imag-text分布，后续指标下降是由于训练集与验证集分布差异大，模型过拟合无法适应验证集分布
 
-* 从从头训练
+* 从头训练
 
 ![指标变化](doc/metric_scratch.png "从头训练指标变化")  
+
 > * 损失持续下降，但准确率和相似度最终最高只能稳定在0.17和0.13附近，同样出现了指标随着step增加持续下降的特点。
 > * 原因同样推测为训练集数据量太少无法适应验证集的分布
 
