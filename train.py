@@ -16,6 +16,7 @@ import numpy as np
 import os
 import time
 import pandas as pd
+import warnings
 
 def print_step(step_num, data, item='loss'):
     print("step: {:0>8d}{:>8s} {:s}: {:.4f}".format(step_num, '', item, data))
@@ -60,6 +61,62 @@ class yaml_load():
         if isinstance(self.lr, str):
             self.lr = eval(self.lr)
 
+# def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
+#     device = args.device
+#     model.train()
+#     model.to(device)
+#     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+#     schduler = lr_scheduler.LinearLR(optimizer, 
+#                                      start_factor=1, 
+#                                      end_factor=args.lr_final, 
+#                                      total_iters=args.epochs)
+#     schduler_warmup = lr_scheduler.LinearLR(optimizer, 
+#                                             start_factor=0.001, 
+#                                             end_factor=1, 
+#                                             total_iters=args.warmup)
+#     scaler = GradScaler(device=device)
+#     for epoch in range(args.epochs):
+#         for step, (images, texts) in enumerate(train_loader):
+#             step += epoch * len(train_loader)
+#             with autocast(device, enabled=args.amp, dtype=torch.bfloat16):
+#                 output = model(images.to(device), texts.to(device))
+#                 loss = loss_fun(**output)
+
+#             if step < args.warmup:
+#                 schduler_warmup.step()
+            
+#             if (step + 1) % args.accumulate == 0:
+#                 optimizer.zero_grad()
+#                 if args.amp:
+#                     loss = scaler.scale(loss)
+#                     scaler.scale(loss).backward()
+#                     scaler.step(optimizer)
+#                     scaler.update()
+#                 else:
+#                     loss.backward()
+#                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+#                     optimizer.step()
+
+#                 print_step(step, loss.data.item())
+#                 #current_lr = optimizer.param_groups[0]['lr']
+#                 #print('lr: ', current_lr)
+#                 # optimizer.zero_grad()
+            
+#             # if (step + 1) % args.val_accumulate == 0:
+#             if step % args.val_accumulate == 0:
+#                 current_lr = optimizer.param_groups[0]['lr']
+#                 metric = {'step': step, 
+#                           'train_loss': loss.data.item(), 
+#                           'lr': current_lr}
+#                 metric.update(test(args, model, val_loader))
+#                 #save_checkpoint(model, step, args.save_dir)
+#                 save_metric(metric, args.metric_csv)
+                 
+#         if step >= args.warmup:
+#             schduler.step()
+#     save_checkpoint(model, step, args.save_dir)
+
+
 def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
     device = args.device
     model.train()
@@ -70,44 +127,50 @@ def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
                                      end_factor=args.lr_final, 
                                      total_iters=args.epochs)
     schduler_warmup = lr_scheduler.LinearLR(optimizer, 
-                                            start_factor=0.001, 
+                                            start_factor=args.warmup_start_frac, 
                                             end_factor=1, 
                                             total_iters=args.warmup)
     scaler = GradScaler(device=device)
     for epoch in range(args.epochs):
         for step, (images, texts) in enumerate(train_loader):
             step += epoch * len(train_loader)
+            
             with autocast(device, enabled=args.amp, dtype=torch.bfloat16):
                 output = model(images.to(device), texts.to(device))
                 loss = loss_fun(**output)
+                loss_item = loss.data.item()            
+
+            if args.amp:
+                scaler.scale(loss).backward()
+            else:
+                loss.backward()  
 
             if step < args.warmup:
-                schduler_warmup.step()
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")            
+                    schduler_warmup.step()
             
             if (step + 1) % args.accumulate == 0:
-                optimizer.zero_grad()
                 if args.amp:
-                    loss = scaler.scale(loss)
-                    scaler.scale(loss).backward()
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
-                    loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
                     optimizer.step()
+                optimizer.zero_grad()
 
-                print_step(step, loss.data.item())
-                #current_lr = optimizer.param_groups[0]['lr']
-                #print('lr: ', current_lr)
-                # optimizer.zero_grad()
-            
+                print_step(step, loss_item)
+          
             # if (step + 1) % args.val_accumulate == 0:
             if step % args.val_accumulate == 0:
                 current_lr = optimizer.param_groups[0]['lr']
-                metric = {'step': step, 
+                metric = {'time': time.strftime("%m-%d %H:%M"),
+                          'step': step, 
                           'train_loss': loss.data.item(), 
                           'lr': current_lr}
-                metric.update(test(args, model, val_loader))
+                metric.update(val(args, model, val_loader))
                 #save_checkpoint(model, step, args.save_dir)
                 save_metric(metric, args.metric_csv)
                  
@@ -116,7 +179,7 @@ def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
     save_checkpoint(model, step, args.save_dir)
 
 @torch.no_grad()
-def test(args, model, val_loader):
+def val(args, model, val_loader):
     # metric: acc and avg smilarity 
     # val_loader for no shuffle
     device = args.device
@@ -135,7 +198,7 @@ def test(args, model, val_loader):
     return metric
 
 if __name__ == '__main__':
-    cfg = 'config.yaml'
+    cfg = 'config/config.yaml'
     args = yaml_load(cfg)
     model, transform = build_model_transform(args.model_hyp)
     tokenizer = build_tokenizer()
@@ -154,7 +217,7 @@ if __name__ == '__main__':
     train(args, model, loss_fun, train_loader, val_loader)
 
     """
-    nohup /var/lib/anaconda3/envs/tkh/bin/python /home/chaofeng/clip_finetune/train.py > /home/chaofeng/clip_finetune/n_scratch_amp.log 2>&1 &
+    nohup /var/lib/anaconda3/envs/tkh/bin/python /home/chaofeng/clip_finetune/train.py > /home/chaofeng/clip_finetune/n_scratch.log 2>&1 &
     """
 
     """

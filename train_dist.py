@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2,3'
 from tools.utils import (
                     build_tokenizer,
                     build_clip_loss,
@@ -19,17 +19,13 @@ from tools.dist_tools import (
 import torch
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
-import torch.nn as nn
-from contextlib import contextmanager
-
-
-from typing import Union, Tuple
 from torch.optim.adamw import AdamW
 from torch.optim import lr_scheduler
 import numpy as np
 import time
 import pandas as pd
 from torch import distributed as dist
+import warnings
 
 def print_step(step_num, data, item='loss'):
     print("step: {:0>8d}{:>8s} {:s}: {:.4f}".format(step_num, '', item, data))
@@ -78,14 +74,14 @@ class yaml_load():
 def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
     device = args.device
     de_parallel(model).train()
-    # model.to(device)
+
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     schduler = lr_scheduler.LinearLR(optimizer, 
                                      start_factor=1, 
                                      end_factor=args.lr_final, 
                                      total_iters=args.epochs)
     schduler_warmup = lr_scheduler.LinearLR(optimizer, 
-                                            start_factor=0.001, 
+                                            start_factor=args.warmup_start_frac, 
                                             end_factor=1, 
                                             total_iters=args.warmup)
     scaler = GradScaler(device=device)
@@ -94,13 +90,14 @@ def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
         for step, (images, texts) in enumerate(train_loader):
             step += epoch * len(train_loader)
             
-            print('rank:%d ' % RANK, 'step:%d '%step, 'tttt: ', images.shape)
-            #time.sleep(1)
+            # print('rank:%d ' % RANK, 'step:%d '%step, 'tttt: ', images.shape)
             
             with autocast(device, enabled=args.amp, dtype=torch.bfloat16):
                 output = model(images.to(device), texts.to(device))
                 loss = loss_fun(**output)
+                loss_item = loss.data.item()
                 loss = loss * WORLD_SIZE
+
             
             if args.amp:
                 scaler.scale(loss).backward()
@@ -108,7 +105,9 @@ def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
                 loss.backward()            
 
             if step < args.warmup:
-                schduler_warmup.step()
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")            
+                    schduler_warmup.step()
             
             if (step + 1) % args.accumulate == 0:
                 if args.amp:
@@ -122,16 +121,17 @@ def train(args, model:torch.nn.Module, loss_fun, train_loader, val_loader):
                 optimizer.zero_grad()
 
                 if is_master():
-                    print_step(step, loss.data.item())
+                    print_step(step, loss_item)
             
             # if (step + 1) % args.val_accumulate == 0:
             if step % args.val_accumulate == 0:
                 with torch_distributed_zero_first(RANK): # barrier for no master
                     if is_master():
                         current_lr = optimizer.param_groups[0]['lr']
-                        metric = {'step': step, 
-                                'train_loss': loss.data.item(), 
-                                'lr': current_lr}
+                        metric = {'time': time.strftime("%m-%d %H:%M"),
+                                  'step': step, 
+                                  'train_loss': loss_item, 
+                                  'lr': current_lr}
                         metric.update(val(args, model, val_loader))
                         #save_checkpoint(model, step, args.save_dir)
                         save_metric(metric, args.metric_csv)
@@ -149,7 +149,7 @@ def val(args, model, val_loader):
     model.eval()
     metric = {'acc': 0, 'smilarity': 0}
     for i, (images, texts) in enumerate(val_loader):
-        print('vvvvv: ', images.shape)
+        # print('vvvvv: ', images.shape)
         # time.sleep(1)
 
         logits_per_image, _ = model(images.to(device), texts.to(device))
@@ -165,7 +165,7 @@ def val(args, model, val_loader):
 
 if __name__ == '__main__':
     setup_ddp_envs()
-    cfg = 'config.yaml'
+    cfg = 'config/config.yaml'
     args = yaml_load(cfg)
     # update cfg
     args.val_accumulate = args.val_accumulate // WORLD_SIZE
@@ -204,5 +204,5 @@ if __name__ == '__main__':
     """ 
     python -m torch.distributed.run --nproc_per_node 4 --nnodes 1 /home/chaofeng/clip_finetune/train_dist.py
 
-    nohup /var/lib/anaconda3/envs/tkh/bin/python /home/chaofeng/clip_finetune/train.py > /home/chaofeng/clip_finetune/n_scratch_amp.log 2>&1 &
+    nohup python -m torch.distributed.run --nproc_per_node 2 --nnodes 1 /home/chaofeng/clip_finetune/train_dist.py > /home/chaofeng/clip_finetune/n_scratch_dist.log 2>&1 &
     """

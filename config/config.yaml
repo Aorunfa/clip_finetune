@@ -32,21 +32,22 @@ val:
   img_key: 'link'
   caption_key: 'caption'
 
-device: 'cuda:3'
-resum_path: '' # '/dev/shm/chaofeng/ViT-B-32.pt'    # pretrained checkpoint path, /dev/shm/chaofeng/RN50.pt
+device: 'cuda:2'
+resum_path: '/dev/shm/chaofeng/ViT-B-32.pt' # '/dev/shm/chaofeng/ViT-B-32.pt'    # pretrained checkpoint path, /dev/shm/chaofeng/RN50.pt
 batch_size: 64    # no less than 8
 num_workers: 8
 epochs: 400
-warmup: 1000      # per batch
+warmup: 1000            # per batch
+warmup_start_frac: 0.001
 accumulate: 10
-val_accumulate: 1000 # per time to run test fn
+val_accumulate: 800 # per time to run test fn
 save_dir: './record/checkpoint/clip'
-metric_csv: ./record/metric_scratch_dist.csv
+metric_csv: ./record/metric_ft.csv
 
 
 # optimiezer
-lr: 1e-5              # 1e-5 for scratch, 1e-6 for finetune 
+lr: 5e-7              # 1e-5 for scratch, 1e-6 for finetune 
 lr_final: 0.001
 
 # amp
-amp: True
+amp: False
