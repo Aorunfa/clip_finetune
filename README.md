@@ -4,7 +4,7 @@
 - [x] <input type="checkbox" disabled checked> 数据预处理脚本
 - [x] <input type="checkbox" disabled checked> 损失函数
 - [x] <input type="checkbox" disabled checked> 单卡训练
-- [x] <input type="checkbox" disabled checked > 单机多卡训练
+- [x] <input type="checkbox" disabled checked> 单机多卡训练
 
 # 快速开始
 ## 环境安装
